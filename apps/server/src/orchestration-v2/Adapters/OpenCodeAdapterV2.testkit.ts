@@ -120,11 +120,26 @@ function frameRecord(frame: unknown): Record<string, unknown> | null {
   return typeof frame === "object" && frame !== null ? (frame as Record<string, unknown>) : null;
 }
 
+function replaceStrings(value: unknown, replacements: ReadonlyMap<string, string>): unknown {
+  if (replacements.size === 0) return value;
+  if (typeof value === "string") return replacements.get(value) ?? value;
+  if (Array.isArray(value)) return value.map((entry) => replaceStrings(entry, replacements));
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, replaceStrings(entry, replacements)]),
+    );
+  }
+  return value;
+}
+
 export class OpenCodeReplayController {
   private cursor = 0;
   private readonly waiters = new Set<() => void>();
   private failure: unknown = null;
   private readonly transcript: OpenCodeSdkReplayTranscript;
+  private readonly liveIdsByRecorded = new Map<string, string>();
+  private readonly recordedIdsByLive = new Map<string, string>();
+  private readonly promptedMessageIdsBySession = new Map<string, string>();
 
   constructor(transcript: OpenCodeSdkReplayTranscript) {
     this.transcript = transcript;
@@ -133,7 +148,8 @@ export class OpenCodeReplayController {
   async expectOutbound(actual: unknown): Promise<void> {
     try {
       const entry = this.transcript.entries[this.cursor];
-      if (entry?.type !== "expect_outbound" || !replayValueMatches(entry.frame, actual)) {
+      const recorded = replaceStrings(actual, this.recordedIdsByLive);
+      if (entry?.type !== "expect_outbound" || !replayValueMatches(entry.frame, recorded)) {
         throw new OpenCodeReplayMismatchError({
           scenario: this.transcript.scenario,
           cursor: this.cursor,
@@ -142,10 +158,41 @@ export class OpenCodeReplayController {
         });
       }
       this.advance();
+      this.capturePromptedMessageId(actual);
     } catch (cause) {
       this.fail(cause);
       throw cause;
     }
+  }
+
+  /**
+   * OpenCode persists the client-supplied `messageID` from `session.promptAsync` as the id of the
+   * echoed user message. Recorded transcripts carry the id from the recording run, so the replay
+   * aliases that recorded id to the id the adapter sent for the same session, mirroring the server.
+   */
+  private capturePromptedMessageId(actual: unknown): void {
+    const frame = frameRecord(actual);
+    if (frame?.type !== "session.promptAsync") return;
+    const input = frameRecord(frame.input);
+    if (typeof input?.sessionID !== "string" || typeof input.messageID !== "string") return;
+    this.promptedMessageIdsBySession.set(input.sessionID, input.messageID);
+  }
+
+  private aliasPromptedUserMessage(event: unknown): void {
+    const frame = frameRecord(event);
+    if (frame?.type !== "message.updated") return;
+    const properties = frameRecord(frame.properties);
+    const info = frameRecord(properties?.info);
+    if (info?.role !== "user" || typeof info.id !== "string") return;
+    const sessionId =
+      typeof properties?.sessionID === "string" ? properties.sessionID : info.sessionID;
+    if (typeof sessionId !== "string") return;
+    const liveId = this.promptedMessageIdsBySession.get(sessionId);
+    if (liveId === undefined) return;
+    this.promptedMessageIdsBySession.delete(sessionId);
+    if (liveId === info.id || this.liveIdsByRecorded.has(info.id)) return;
+    this.liveIdsByRecorded.set(info.id, liveId);
+    this.recordedIdsByLive.set(liveId, info.id);
   }
 
   async response(operation: string): Promise<unknown> {
@@ -158,7 +205,7 @@ export class OpenCodeReplayController {
           if (entry.afterMs !== undefined && entry.afterMs > 0) {
             await Effect.runPromise(Effect.sleep(Duration.millis(entry.afterMs)));
           }
-          const data = frame.data;
+          const data = replaceStrings(frame.data, this.liveIdsByRecorded);
           this.advance();
           return data;
         }
@@ -188,7 +235,8 @@ export class OpenCodeReplayController {
           if (entry.afterMs !== undefined && entry.afterMs > 0) {
             await Effect.runPromise(Effect.sleep(Duration.millis(entry.afterMs)));
           }
-          const event = frame.event as OpenCodeEvent;
+          this.aliasPromptedUserMessage(frame.event);
+          const event = replaceStrings(frame.event, this.liveIdsByRecorded) as OpenCodeEvent;
           this.advance();
           yield event;
           continue;

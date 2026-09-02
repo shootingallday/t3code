@@ -1,3 +1,4 @@
+import * as NodeURL from "node:url";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import type { OrchestrationV2DomainEvent, ProviderReplayTranscript } from "@t3tools/contracts";
@@ -31,7 +32,7 @@ import {
 
 const readTranscript = Effect.fn("readOrchestratorReplayTranscript")(function* (file: URL) {
   const fs = yield* FileSystem.FileSystem;
-  const text = yield* fs.readFileString(decodeURIComponent(file.pathname));
+  const text = yield* fs.readFileString(NodeURL.fileURLToPath(file));
   return yield* decodeProviderReplayNdjson(text);
 }, Effect.provide(NodeServices.layer));
 
