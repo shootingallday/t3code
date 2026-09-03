@@ -42,15 +42,13 @@ jobs:
       candidate_sha: ${{ steps.rebase.outputs.candidate_sha }}
       has_changes: ${{ steps.check.outputs.has_changes }}
     steps:
+      # Full clone on purpose: a sparse checkout is a blob-less partial clone,
+      # and the rebase cannot lazily fetch upstream-only blobs from origin.
       - name: Checkout
         uses: actions/checkout@v6
         with:
           ref: ${{ env.FORK_BRANCH }}
           fetch-depth: 0
-          sparse-checkout: |
-            /*
-            !/.repos/
-          sparse-checkout-cone-mode: false
 
       - name: Configure git identity
         run: |
@@ -87,11 +85,11 @@ jobs:
             body="$(printf 'Rebasing `%s` (%s) onto `%s` main (%s) stopped on conflicts.\n\nFiles:\n%s\n\nResolve locally, push `%s`, and rerun the Super Nightly workflow.\n\nRun: %s/%s/actions/runs/%s' \
               "$FORK_BRANCH" "$base_sha" "$UPSTREAM_REPOSITORY" "$(git rev-parse upstream/main)" "$conflicts" "$FORK_BRANCH" \
               "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
-            existing="$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')"
+            existing="$(gh api "repos/${GITHUB_REPOSITORY}/issues?state=open&per_page=100" --jq "[.[] | select(.title == \"$title\")][0].number // empty")"
             if [[ -n "$existing" ]]; then
-              gh issue comment "$existing" --body "$body"
+              gh api "repos/${GITHUB_REPOSITORY}/issues/${existing}/comments" -f body="$body" >/dev/null
             else
-              gh issue create --title "$title" --body "$body"
+              gh api "repos/${GITHUB_REPOSITORY}/issues" -f title="$title" -f body="$body" >/dev/null
             fi
             echo "::error::${title}"
             exit 1
@@ -444,9 +442,9 @@ jobs:
           body="$(printf 'Candidate `%s` did not ship. `%s` was not moved.\n\nRun: %s/%s/actions/runs/%s' \
             "${{ needs.sync.outputs.candidate_sha }}" "$FORK_BRANCH" \
             "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
-          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')"
+          existing="$(gh api "repos/${GITHUB_REPOSITORY}/issues?state=open&per_page=100" --jq "[.[] | select(.title == \"$title\")][0].number // empty")"
           if [[ -n "$existing" ]]; then
-            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
+            gh api "repos/${GITHUB_REPOSITORY}/issues/${existing}/comments" -f body="$body" >/dev/null
           else
-            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+            gh api "repos/${GITHUB_REPOSITORY}/issues" -f title="$title" -f body="$body" >/dev/null
           fi
