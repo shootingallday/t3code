@@ -2098,6 +2098,21 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             // instanceRegistry.streamChanges, () => syncLiveSources)`
             // fires `syncLiveSources`, which subscribes and launches a fresh
             // background refresh on the rebuilt instance.
+            // Subscribe before publishing so the rebuilt instance's probe
+            // result cannot be missed. The probe runs real process I/O, so
+            // the test waits on the published snapshot rather than TestClock.
+            const reprobe = yield* registry.streamChanges.pipe(
+              Stream.filter(
+                (providers) =>
+                  providers.some(
+                    (provider) => provider.instanceId === "codex" && provider.status === "error",
+                  ) && spawnedCommands.includes(secondMissing),
+              ),
+              Stream.runHead,
+              Effect.forkChild,
+            );
+            yield* Effect.yieldNow;
+
             yield* serverSettings.updateSettings({
               providers: {
                 codex: { enabled: true, binaryPath: secondMissing },
@@ -2107,25 +2122,9 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             // not subscribe before forking has already lost this update.
             yield* Deferred.succeed(allowLazySettingsStream, undefined);
 
-            // Poll until the injected process boundary observes the new
-            // executable. This verifies the public settings-to-probe behavior
-            // without depending on timestamps assigned by TestClock.
-            const refreshed = yield* Effect.gen(function* () {
-              for (let attempts = 0; attempts < 60; attempts += 1) {
-                const providers = yield* registry.getProviders;
-                const codex = providers.find((provider) => provider.instanceId === "codex");
-                if (
-                  codex !== undefined &&
-                  codex.status === "error" &&
-                  spawnedCommands.includes(secondMissing)
-                ) {
-                  return providers;
-                }
-                yield* TestClock.adjust("50 millis");
-                yield* Effect.yieldNow;
-              }
-              return yield* registry.getProviders;
-            });
+            const published = yield* Fiber.join(reprobe);
+            assert.strictEqual(published._tag, "Some");
+            const refreshed = yield* registry.getProviders;
 
             const reprobedCodex = refreshed.find((provider) => provider.instanceId === "codex");
             assert.deepStrictEqual(spawnedCommands, [firstMissing, secondMissing]);
