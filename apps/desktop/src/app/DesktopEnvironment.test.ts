@@ -117,6 +117,8 @@ describe("DesktopEnvironment", () => {
       assert.equal(environment.browserArtifactsDir, "/tmp/t3/userdata/browser-artifacts");
       assert.equal(environment.serverSettingsPath, "/tmp/t3/userdata/settings.json");
       assert.equal(environment.otlpProtocol, "http/json");
+      assert.equal(environment.userDataDirName, "t3code-supernightly");
+      assert.equal(environment.legacyUserDataDirName, "T3 Code (Super Nightly)");
     }),
   );
 
@@ -163,8 +165,8 @@ describe("DesktopEnvironment", () => {
       );
       const production = yield* makeEnvironment();
 
-      assert.equal(development.stateDir, "/Users/alice/.t3/dev");
-      assert.equal(production.stateDir, "/Users/alice/.t3/userdata");
+      assert.equal(development.stateDir, "/Users/alice/.t3-supernightly/dev");
+      assert.equal(production.stateDir, "/Users/alice/.t3-supernightly/userdata");
     }),
   );
 
