@@ -312,18 +312,33 @@ jobs:
       - name: Install Spectre-mitigated MSVC libs
         shell: pwsh
         run: |
-          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installervswhere.exe"
+          $components = @(
+            "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+            "Microsoft.VisualStudio.Component.VC.Runtimes.x86.x64.Spectre"
+          )
+          $ready = & $vswhere -latest -products * -requires $components -property installationPath
+          if ($ready) {
+            Write-Host "Spectre libraries already present in $ready"
+            exit 0
+          }
           $installPath = & $vswhere -products * -latest -property installationPath
           $setupExe = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
           $proc = Start-Process -FilePath $setupExe `
             -ArgumentList "modify", "--installPath", "`"$installPath`"", "--add", `
-            "Microsoft.VisualStudio.Component.VC.Tools.x86.x64.Spectre", "--quiet", "--norestart" `
+            "Microsoft.VisualStudio.Component.VC.Runtimes.x86.x64.Spectre", "--quiet", "--norestart" `
             -Wait -PassThru -NoNewWindow
           if ($null -eq $proc -or $proc.ExitCode -ne 0) {
             $code = if ($null -ne $proc) { $proc.ExitCode } else { 1 }
             Write-Error "Visual Studio Installer failed with exit code $code"
             exit $code
           }
+          $ready = & $vswhere -latest -products * -requires $components -property installationPath
+          if (!$ready) {
+            Write-Error "Spectre libraries still missing after install in $installPath"
+            exit 1
+          }
+          Write-Host "Spectre libraries installed in $ready"
 
       - name: Build desktop artifact
         shell: bash
