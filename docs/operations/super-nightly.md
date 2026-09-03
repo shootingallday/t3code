@@ -35,8 +35,12 @@ The installer bakes `app-update.yml` pointing at this repository's releases on t
 channel. Because the repository is private, the build embeds a read-only token so the installed app
 can list and download release assets.
 
-Required repository secret:
+Required repository secrets:
 
+- `SUPER_NIGHTLY_PUSH_TOKEN`: a fine-grained personal access token limited to this repository with
+  `Contents: Read and write` and `Workflows: Read and write`. The sync and publish jobs push with it.
+  The default Actions token cannot push a commit that changes any file under `.github/workflows`,
+  so without this secret the sync fails as soon as upstream edits one of its workflows.
 - `T3CODE_DESKTOP_UPDATE_TOKEN`: a fine-grained personal access token limited to this repository
   with `Contents: Read`. Without it the build still ships, with a warning, but the installed app
   cannot check for updates. Rotate it before it expires and rerun the workflow; the next installed
