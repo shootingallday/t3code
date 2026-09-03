@@ -7,6 +7,9 @@ Everything not listed here follows the global workflow.
   pull requests on `pingdotgg/t3code`.
 - `super-nightly` is the default branch and the only branch pull requests target. `main` mirrors
   upstream and is never committed to. Branch mechanics: `docs/operations/super-nightly.md`.
+- Keep `super-nightly` a short stack of small, independent commits on top of upstream so the
+  daily rebase stays cheap. The pre-reset stack (orchestration v2 and its features) lives on
+  `ov2-archive` for reference only; port pieces from it as ordinary pull requests, never rebase it.
 - Upstream CI is disabled here and no check runs on pull requests. Proof is local: focused tests,
   lint, and typecheck for the touched scope, recorded in the pull request body. The daily Super
   Nightly workflow runs the full suite on the rebased branch before it moves `super-nightly`.
