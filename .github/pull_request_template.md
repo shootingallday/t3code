@@ -1,33 +1,27 @@
-<!--
-⚠️ READ BEFORE OPENING ⚠️
+## Issue
 
-We are not actively accepting contributions right now.
+Closes #
 
-You can still open a PR, but please do so knowing there is a high chance
-we may close it without merging it, or never review it.
+## Outcome
 
-- Small, focused PRs are strongly preferred. Bug fixes are most likely to be merged.
-- New features will most likely just annoy us.
-- 1,000+ line PRs with a bunch of new features will probably get you banned from the repo.
--->
+<!-- What behavior changed? -->
 
-## What Changed
+## Proof
 
-<!-- Describe the change clearly and keep scope tight. -->
+<!-- What was run or inspected, and what happened? This repository has no pull-request checks;
+     focused tests, lint, and typecheck for the touched scope are the proof. -->
 
-## Why
+## Review focus
 
-<!-- Explain the problem being solved and why this approach is the right one. -->
+<!-- What deserves extra attention? Remove this section when nothing does. -->
 
-## UI Changes
+## Visual evidence
 
-<!-- If this PR changes UI, include clear before/after screenshots.
-     If the change involves motion or interaction, include a short video.
-     Delete this section if not applicable. -->
+<!-- Before/after screenshots for interface changes, a short video for motion. Upload to GitHub;
+     never commit assets. Remove otherwise. -->
 
-## Checklist
+## Risk
 
-- [ ] This PR is small and focused
-- [ ] I explained what changed and why
-- [ ] I included before/after screenshots for any UI changes
-- [ ] I included a video for animation/interaction changes
+<!-- Meaningful migration, rollout, or rollback risk. Remove otherwise. -->
+
+Built with <model> in <harness>.
