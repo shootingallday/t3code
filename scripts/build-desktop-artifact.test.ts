@@ -320,6 +320,33 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     }),
   );
 
+  it.effect("marks the GitHub update feed private when an update token is configured", () =>
+    Effect.gen(function* () {
+      const config = yield* resolveGitHubPublishConfig("nightly").pipe(
+        Effect.provide(
+          ConfigProvider.layer(
+            ConfigProvider.fromEnv({
+              env: {
+                GITHUB_REPOSITORY: "shootingallday/t3code",
+                T3CODE_DESKTOP_UPDATE_TOKEN: "github_pat_example",
+              },
+            }),
+          ),
+        ),
+      );
+
+      assert.deepStrictEqual(config, {
+        provider: "github",
+        owner: "shootingallday",
+        repo: "t3code",
+        releaseType: "prerelease",
+        channel: "nightly",
+        private: true,
+        token: "github_pat_example",
+      });
+    }),
+  );
+
   it.effect("omits update feeds for pull request preview builds", () =>
     Effect.gen(function* () {
       const preview = yield* createBuildConfig(

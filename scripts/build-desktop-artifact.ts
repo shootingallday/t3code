@@ -2351,6 +2351,7 @@ export const resolveGitHubPublishConfig = Effect.fn("resolveGitHubPublishConfig"
   const env = yield* Config.all({
     updateRepository: Config.string("T3CODE_DESKTOP_UPDATE_REPOSITORY").pipe(Config.option),
     githubRepository: Config.string("GITHUB_REPOSITORY").pipe(Config.option),
+    updateToken: Config.string("T3CODE_DESKTOP_UPDATE_TOKEN").pipe(Config.option),
   });
   const rawRepo = (
     Option.getOrUndefined(env.updateRepository)?.trim() ||
@@ -2362,12 +2363,15 @@ export const resolveGitHubPublishConfig = Effect.fn("resolveGitHubPublishConfig"
   const [owner, repo, ...rest] = rawRepo.split("/");
   if (!owner || !repo || rest.length > 0) return undefined;
 
+  const updateToken = Option.getOrUndefined(env.updateToken)?.trim();
+
   return {
     provider: "github",
     owner,
     repo,
     releaseType: updateChannel === "nightly" ? "prerelease" : "release",
     ...(updateChannel === "nightly" ? { channel: "nightly" as const } : {}),
+    ...(updateToken ? { private: true, token: updateToken } : {}),
   };
 });
 
