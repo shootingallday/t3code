@@ -13,7 +13,7 @@
 
 ## What the workflow does
 
-`.github/workflows/super-nightly.yml` runs twice a day (01:13 and 13:13 UTC) and on manual dispatch:
+`.github/workflows/super-nightly.yml` runs every 3 hours (:28 past 01, 04, 07, 10, 13, 16, 19, 22 UTC) and on manual dispatch:
 
 1. **Sync.** Fetches upstream, fast-forwards `main`, rebases `super-nightly` onto upstream `main`,
    and pushes the result to `super-nightly-next`. Skips the rest when the tree is identical to the
