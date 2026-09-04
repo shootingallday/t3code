@@ -8,9 +8,10 @@ name: Super Nightly
 
 on:
   schedule:
-    # 09:13 and 21:13 America/New_York during EDT. GitHub cron is UTC only and
-    # has no DST, so this shifts to 08:13/20:13 local after DST ends.
-    - cron: "13 1,13 * * *"
+    # Every 3 hours, 50 minutes after upstream's own "38 */3 * * *" release
+    # cron, so upstream's build (15-40 min) has published before we rebase.
+    # Off minute zero because GitHub delays scheduled runs most at the hour.
+    - cron: "28 1-23/3 * * *"
   workflow_dispatch:
     inputs:
       skip_sync:
