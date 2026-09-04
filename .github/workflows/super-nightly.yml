@@ -8,7 +8,9 @@ name: Super Nightly
 
 on:
   schedule:
-    - cron: "38 9 * * *"
+    # 09:13 and 21:13 America/New_York during EDT. GitHub cron is UTC only and
+    # has no DST, so this shifts to 08:13/20:13 local after DST ends.
+    - cron: "13 1,13 * * *"
   workflow_dispatch:
     inputs:
       skip_sync:
