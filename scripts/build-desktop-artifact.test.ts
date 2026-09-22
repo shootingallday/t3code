@@ -321,7 +321,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     }),
   );
 
-  it.effect("marks the GitHub update feed private when an update token is configured", () =>
+  it.effect("uses the public fork feed without embedding an ambient update token", () =>
     Effect.gen(function* () {
       const config = yield* resolveGitHubPublishConfig("nightly").pipe(
         Effect.provide(
@@ -342,8 +342,6 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         repo: "t3code",
         releaseType: "prerelease",
         channel: "nightly",
-        private: true,
-        token: "github_pat_example",
       });
     }),
   );
