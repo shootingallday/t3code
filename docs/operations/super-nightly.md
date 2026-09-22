@@ -19,11 +19,14 @@ when the candidate differs from the last Super Nightly release.
 
 1. **Sync.** Fetches upstream, fast-forwards `main`, rebases `super-nightly` onto the latest published upstream nightly,
    and pushes the result to `super-nightly-next`. Skips the rest when the tree is identical to the
-   last Super Nightly tag.
+   last complete, published Super Nightly release. Drafts and releases missing update assets
+   do not suppress retries.
 2. **Quality.** `vp check`, typecheck, and tests on the candidate.
-3. **Build.** Windows x64 NSIS installer, unsigned, with the WSL node-pty prebuild bundled.
-4. **Release.** Moves `super-nightly` to the candidate, then publishes a GitHub prerelease tagged
-   `vX.Y.Z-nightly.YYYYMMDD.N` with the installer, blockmap, and `nightly.yml`.
+3. **Build.** Windows x64 NSIS installer, unsigned, with the same-revision Linux CLI archive
+   bundled for WSL. The Linux archive is smoke-tested before Windows packaging.
+4. **Release.** Moves `super-nightly` to the candidate, uploads a draft tagged
+   `vX.Y.Z-nightly.YYYYMMDD.N`, and publishes it only after the installer, matching blockmap,
+   and `nightly.yml` are present.
 
 If the rebase hits conflicts the workflow opens or updates the issue "Upstream sync conflict on
 super-nightly" listing the files and stops without touching `super-nightly`. Any later failure opens
@@ -31,7 +34,9 @@ or updates "Super Nightly failed". The candidate is promoted only after quality 
 installer build pass. Publication follows promotion; a publication failure can leave the branch
 promoted without a new release. Fix the failure and rerun the workflow.
 
-Manual dispatch with `skip_sync` builds the current `super-nightly` without rebasing.
+Manual dispatch builds the selected branch, allowing a repair branch to pass the full pipeline
+before promotion. `skip_sync` skips rebasing that branch. Promotion stops if `super-nightly`
+changed since checkout.
 
 ## Updates in the installed app
 
