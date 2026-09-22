@@ -118,6 +118,7 @@ describe("DesktopEnvironment", () => {
       assert.equal(environment.serverSettingsPath, "/tmp/t3/userdata/settings.json");
       assert.equal(environment.otlpProtocol, "http/json");
       assert.equal(environment.userDataDirName, "t3code-supernightly");
+      assert.equal(environment.appUserModelId, "com.t3tools.t3code.supernightly");
       assert.equal(environment.legacyUserDataDirName, "T3 Code (Super Nightly)");
     }),
   );
