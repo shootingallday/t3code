@@ -7,15 +7,17 @@
 
 - `main` is a mirror of upstream `main`. Never commit to it. The workflow fast-forwards it.
 - `super-nightly` is the product. Every fork commit lives here as a linear stack on top of
-  upstream `main`. It is the repository's default branch so scheduled workflows run from it.
+  upstream's latest published nightly. It is the default branch so scheduled workflows run from it.
 - `super-nightly-next` is a scratch ref the workflow writes while a candidate is being verified.
   It is deleted after promotion.
 
 ## What the workflow does
 
-`.github/workflows/super-nightly.yml` runs every 3 hours (:28 past 01, 04, 07, 10, 13, 16, 19, 22 UTC) and on manual dispatch:
+`.github/workflows/super-nightly.yml` checks hourly at :28 UTC and on manual dispatch. Upstream
+publishes nightlies at least six hours apart when there are new commits. A check builds only
+when the candidate differs from the last Super Nightly release.
 
-1. **Sync.** Fetches upstream, fast-forwards `main`, rebases `super-nightly` onto upstream `main`,
+1. **Sync.** Fetches upstream, fast-forwards `main`, rebases `super-nightly` onto the latest published upstream nightly,
    and pushes the result to `super-nightly-next`. Skips the rest when the tree is identical to the
    last Super Nightly tag.
 2. **Quality.** `vp check`, typecheck, and tests on the candidate.
@@ -25,15 +27,18 @@
 
 If the rebase hits conflicts the workflow opens or updates the issue "Upstream sync conflict on
 super-nightly" listing the files and stops without touching `super-nightly`. Any later failure opens
-or updates "Super Nightly failed". `super-nightly` only moves when everything is green.
+or updates "Super Nightly failed". The candidate is promoted only after quality checks and the
+installer build pass. Publication follows promotion; a publication failure can leave the branch
+promoted without a new release. Fix the failure and rerun the workflow.
 
 Manual dispatch with `skip_sync` builds the current `super-nightly` without rebasing.
 
 ## Updates in the installed app
 
 The installer bakes `app-update.yml` pointing at this repository's releases on the `nightly`
-channel. Because the repository is private, the build embeds a read-only token so the installed app
-can list and download release assets.
+channel. The repository is public, so installed apps download updates without credentials.
+An older private-feed installation needs this public-feed installer installed once; subsequent
+updates use the normal install-and-restart prompt.
 
 Required repository secrets:
 
@@ -41,10 +46,9 @@ Required repository secrets:
   `Contents: Read and write` and `Workflows: Read and write`. The sync and publish jobs push with it.
   The default Actions token cannot push a commit that changes any file under `.github/workflows`,
   so without this secret the sync fails as soon as upstream edits one of its workflows.
-- `T3CODE_DESKTOP_UPDATE_TOKEN`: a fine-grained personal access token limited to this repository
-  with `Contents: Read`. Without it the build still ships, with a warning, but the installed app
-  cannot check for updates. Rotate it before it expires and rerun the workflow; the next installed
-  update carries the new token.
+
+Renew the push token before its expiration and replace the Actions secret. Never embed a token
+in a public installer.
 
 Repository variables (public identifiers, the same ones `.env.example` documents):
 
@@ -58,7 +62,8 @@ Repository variables (public identifiers, the same ones `.env.example` documents
 ```sh
 cd <super-nightly worktree>
 git fetch upstream main
-git rebase upstream/main
+git fetch upstream <nightly-commit-from-the-conflict-issue>
+git rebase <nightly-commit-from-the-conflict-issue>
 # resolve, then
 git push --force-with-lease origin super-nightly
 gh workflow run "Super Nightly" --field skip_sync=false
