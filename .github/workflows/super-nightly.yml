@@ -1,17 +1,8 @@
 name: Super Nightly
 
-# Fork-only. Rebases `super-nightly` onto pingdotgg/t3code main, gates the
-# result on the release quality checks, builds the Windows installer, publishes
-# it as a GitHub prerelease on this repository, and only then moves
-# `super-nightly` to the rebased commit. The installed app updates from these
-# releases. See docs/operations/super-nightly.md.
-
 on:
   schedule:
-    # Every 3 hours, 50 minutes after upstream's own "38 */3 * * *" release
-    # cron, so upstream's build (15-40 min) has published before we rebase.
-    # Off minute zero because GitHub delays scheduled runs most at the hour.
-    - cron: "28 1-23/3 * * *"
+    - cron: "28 * * * *"
   workflow_dispatch:
     inputs:
       skip_sync:
@@ -59,22 +50,44 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+      - name: Require workflow push credentials
+        env:
+          PUSH_TOKEN: ${{ secrets.SUPER_NIGHTLY_PUSH_TOKEN }}
+        run: |
+          if [[ -z "$PUSH_TOKEN" ]]; then
+            echo "::error::Set SUPER_NIGHTLY_PUSH_TOKEN with Contents and Workflows write access."
+            exit 1
+          fi
+
+      - id: upstream_nightly
+        name: Resolve latest published upstream nightly
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { resolveLatestNightlyCommit } = require('./.github/scripts/check-nightly-release.cjs');
+            const [owner, repo] = process.env.UPSTREAM_REPOSITORY.split('/');
+            const release = await resolveLatestNightlyCommit({ github, context: { repo: { owner, repo } }, core });
+            core.setOutput('sha', release.sha);
+
       - name: Fetch upstream
+        env:
+          UPSTREAM_SHA: ${{ steps.upstream_nightly.outputs.sha }}
         run: |
           git remote add upstream "https://github.com/${UPSTREAM_REPOSITORY}.git"
           git fetch --no-tags upstream main
+          git fetch --no-tags upstream "$UPSTREAM_SHA"
+          git merge-base --is-ancestor "$UPSTREAM_SHA" upstream/main
 
       - name: Mirror upstream main
         run: |
-          if ! git push origin upstream/main:refs/heads/main; then
-            echo "::warning::main is not a fast-forward of upstream/main; leaving it alone."
-          fi
+          git push origin upstream/main:refs/heads/main
 
       - id: rebase
-        name: Rebase ${{ env.FORK_BRANCH }} onto upstream/main
+        name: Rebase ${{ env.FORK_BRANCH }} onto the published upstream nightly
         env:
           GH_TOKEN: ${{ github.token }}
           SKIP_SYNC: ${{ inputs.skip_sync }}
+          UPSTREAM_SHA: ${{ steps.upstream_nightly.outputs.sha }}
         run: |
           set -euo pipefail
           base_sha="$(git rev-parse HEAD)"
@@ -82,12 +95,12 @@ jobs:
 
           if [[ "${SKIP_SYNC}" == "true" ]]; then
             echo "Skipping upstream rebase; building ${base_sha}."
-          elif ! git rebase upstream/main; then
+          elif ! git rebase "$UPSTREAM_SHA"; then
             conflicts="$(git diff --name-only --diff-filter=U | sed 's/^/- `/; s/$/`/')"
             git rebase --abort
             title="Upstream sync conflict on ${FORK_BRANCH}"
-            body="$(printf 'Rebasing `%s` (%s) onto `%s` main (%s) stopped on conflicts.\n\nFiles:\n%s\n\nResolve locally, push `%s`, and rerun the Super Nightly workflow.\n\nRun: %s/%s/actions/runs/%s' \
-              "$FORK_BRANCH" "$base_sha" "$UPSTREAM_REPOSITORY" "$(git rev-parse upstream/main)" "$conflicts" "$FORK_BRANCH" \
+            body="$(printf 'Rebasing `%s` (%s) onto `%s` nightly (%s) stopped on conflicts.\n\nFiles:\n%s\n\nResolve locally, push `%s`, and rerun the Super Nightly workflow.\n\nRun: %s/%s/actions/runs/%s' \
+              "$FORK_BRANCH" "$base_sha" "$UPSTREAM_REPOSITORY" "$UPSTREAM_SHA" "$conflicts" "$FORK_BRANCH" \
               "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
             existing="$(gh api "repos/${GITHUB_REPOSITORY}/issues?state=open&per_page=100" --jq "[.[] | select(.title == \"$title\")][0].number // empty")"
             if [[ -n "$existing" ]]; then
@@ -151,11 +164,9 @@ jobs:
 
       - id: release_meta
         name: Resolve release version
-        env:
-          NIGHTLY_DATE: ${{ github.run_started_at }}
         run: |
           node scripts/resolve-nightly-release.ts \
-            --date "$(date -u -d "$NIGHTLY_DATE" +%Y%m%d)" \
+            --date "$(date -u +%Y%m%d)" \
             --run-number "${{ github.run_number }}" \
             --sha "${{ needs.sync.outputs.candidate_sha }}" \
             --github-output
@@ -351,11 +362,8 @@ jobs:
         shell: bash
         env:
           T3CODE_DESKTOP_REUSE_RESOURCE_MONITOR: ${{ steps.resource_monitor_cache.outputs.cache-hit == 'true' }}
-          T3CODE_DESKTOP_UPDATE_TOKEN: ${{ secrets.T3CODE_DESKTOP_UPDATE_TOKEN }}
+          T3CODE_DESKTOP_UPDATE_REPOSITORY: ${{ github.repository }}
         run: |
-          if [[ -z "${T3CODE_DESKTOP_UPDATE_TOKEN}" ]]; then
-            echo "::warning::T3CODE_DESKTOP_UPDATE_TOKEN is not set; this build cannot self-update from the private release feed."
-          fi
           vp run dist:desktop:artifact \
             --platform win \
             --target nsis \
@@ -462,7 +470,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           title="Super Nightly failed"
-          body="$(printf 'Candidate `%s` did not ship. `%s` was not moved.\n\nRun: %s/%s/actions/runs/%s' \
+          body="$(printf 'The release pipeline for candidate `%s` failed. Check the run for promotion and publication status of `%s`.\n\nRun: %s/%s/actions/runs/%s' \
             "${{ needs.sync.outputs.candidate_sha }}" "$FORK_BRANCH" \
             "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
           existing="$(gh api "repos/${GITHUB_REPOSITORY}/issues?state=open&per_page=100" --jq "[.[] | select(.title == \"$title\")][0].number // empty")"
